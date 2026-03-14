@@ -3,6 +3,7 @@ import dns.rdatatype
 import dns.rdataclass
 import dns.rdtypes
 import dns.rdtypes.ANY
+import dns.rdtypes.ANY.TXT
 from dns.rdtypes.ANY.MX import MX
 from dns.rdtypes.ANY.SOA import SOA
 import dns.rdata
@@ -91,7 +92,7 @@ dns_records = {
 
     'nyu.edu.': {
         dns.rdatatype.A:    '192.168.1.106',
-        dns.rdatatype.TXT:  (encrypted_value,),        # raw bytes, decoded safely in server
+        dns.rdatatype.TXT:  (encrypted_value,),
         dns.rdatatype.MX:   [(10, 'mxa-00256a01.gslb.pphosted.com.')],
         dns.rdatatype.AAAA: '2001:0db8:85a3:0000:0000:8a2e:0373:7312',
         dns.rdatatype.NS:   'ns1.nyu.edu.',
@@ -127,9 +128,9 @@ def run_dns_server():
                 elif qtype == dns.rdatatype.TXT:
                     for data in answer_data:
                         if isinstance(data, bytes):
-                            rdata_list.append(dns.rdata.from_text(dns.rdataclass.IN, dns.rdatatype.TXT, '"' + data.decode('utf-8') + '"'))
+                            rdata_list.append(dns.rdtypes.ANY.TXT.TXT(dns.rdataclass.IN, dns.rdatatype.TXT, [data]))
                         else:
-                            rdata_list.append(dns.rdata.from_text(dns.rdataclass.IN, dns.rdatatype.TXT, '"' + data + '"'))
+                            rdata_list.append(dns.rdtypes.ANY.TXT.TXT(dns.rdataclass.IN, dns.rdatatype.TXT, [data.encode('utf-8')]))
                 else:
                     if isinstance(answer_data, str):
                         rdata_list = [dns.rdata.from_text(dns.rdataclass.IN, qtype, answer_data)]
