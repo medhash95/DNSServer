@@ -89,7 +89,7 @@ dns_records = {
     },
     'nyu.edu.': {
         dns.rdatatype.A: '192.168.1.106',
-        dns.rdatatype.TXT: (str(encrypted_value),),
+        dns.rdatatype.TXT: (encrypted_value.decode('utf-8'),),
         dns.rdatatype.MX: [(10, 'mxa-00256a01.gslb.pphosted.com.')],
         dns.rdatatype.AAAA: '2001:0db8:85a3:0000:0000:8a2e:0373:7312',
         dns.rdatatype.NS: 'ns1.nyu.edu.',
@@ -100,8 +100,8 @@ dns_records = {
 def run_dns_server():
     # Create a UDP socket and bind it to the local IP address and port
     server_socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-    # 0.0.0.0 listens on all interfaces. 53 is standard DNS port; use 5353 if no root/admin privileges.
-    server_socket.bind(("0.0.0.0", 5353))
+    dns_port = int(os.getenv('DNS_PORT', '53'))
+    server_socket.bind(("0.0.0.0", dns_port))
 
     while True:
         try:
@@ -121,26 +121,33 @@ def run_dns_server():
             if qname in dns_records and qtype in dns_records[qname]:
                 # Retrieve the data for the record and create an appropriate `rdata` object for it
                 answer_data = dns_records[qname][qtype]
+            else:
+                response.set_rcode(3)  # NXDOMAIN
+                # Set the response flags
+                response.flags |= 1 << 10
+                # print("Unknown request:", qname, qtype)
+                server_socket.sendto(response.to_wire(), addr)
+                continue
 
-                rdata_list = []
+            rdata_list = []
 
-                if qtype == dns.rdatatype.MX:
-                    for pref, server in answer_data:
-                        rdata_list.append(MX(dns.rdataclass.IN, dns.rdatatype.MX, pref, server))
-                elif qtype == dns.rdatatype.SOA:
-                    mname, rname, serial, refresh, retry, expire, minimum = answer_data
-                    rdata = SOA(dns.rdataclass.IN, dns.rdatatype.SOA, mname, rname, serial, refresh, retry, expire, minimum)
-                    rdata_list.append(rdata)
+            if qtype == dns.rdatatype.MX:
+                for pref, server in answer_data:
+                    rdata_list.append(MX(dns.rdataclass.IN, dns.rdatatype.MX, pref, server))
+            elif qtype == dns.rdatatype.SOA:
+                mname, rname, serial, refresh, retry, expire, minimum = answer_data
+                rdata = SOA(dns.rdataclass.IN, dns.rdatatype.SOA, mname, rname, serial, refresh, retry, expire, minimum)
+                rdata_list.append(rdata)
+            else:
+                if isinstance(answer_data, str):
+                    rdata_list = [dns.rdata.from_text(dns.rdataclass.IN, qtype, answer_data)]
                 else:
-                    if isinstance(answer_data, str):
-                        rdata_list = [dns.rdata.from_text(dns.rdataclass.IN, qtype, answer_data)]
-                    else:
-                        rdata_list = [dns.rdata.from_text(dns.rdataclass.IN, qtype, data) for data in answer_data]
+                    rdata_list = [dns.rdata.from_text(dns.rdataclass.IN, qtype, data) for data in answer_data]
 
-                for rdata in rdata_list:
-                    rrset = dns.rrset.RRset(question.name, dns.rdataclass.IN, qtype)
-                    rrset.add(rdata)
-                    response.answer.append(rrset)
+            for rdata in rdata_list:
+                rrset = dns.rrset.RRset(question.name, dns.rdataclass.IN, qtype)
+                rrset.add(rdata)
+                response.answer.append(rrset)
 
             # Set the response flags
             response.flags |= 1 << 10
