@@ -122,7 +122,8 @@ def run_dns_server():
                 # Retrieve the data for the record and create an appropriate `rdata` object for it
                 answer_data = dns_records[qname][qtype]
             else:
-                response.set_rcode(3)  # NXDOMAIN
+                # Unknown domain: return NOERROR with empty answer (non-authoritative, no data)
+                response.set_rcode(0)  # NOERROR
                 # Set the response flags
                 response.flags |= 1 << 10
                 # print("Unknown request:", qname, qtype)
